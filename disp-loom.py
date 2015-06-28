@@ -5,31 +5,43 @@ import wx.grid
 
 from skylark import Database, Model, Field, PrimaryKey, ForeignKey, fn, distinct
 
-class loom_table(wx.grid.Grid):
-	def __init__(self,parent,num_cols,num_rows):
+class loom_table(wx.grid.PyGridTableBase):
+	def __init__(self,num_cols,num_rows):
+		wx.grid.PyGridTableBase.__init__(self)
 		self.__data = [([None] * num_cols) for i in range(num_rows)]
 		self.__row_label=range(num_rows)
 		self.__col_label=range(num_cols)
-		wx.grid.Grid.__init__(self,parent)
-		self.CreateGrid(num_rows , num_cols)
+		self.__num_cols = num_cols
+		self.__num_rows = num_rows
 		
-	def set_col_label(self,cols):
-		self.__col_label = list(cols)
+	def GetNumberRows(self):
+		return self.__num_rows
 		
-	def set_row_label(self,rows):
-		self.__row_label = list(rows)
+	def GetNumberCols(self):
+		return self.__num_cols
+		
+	def IsEmptyCell(self, row, col):
+		return (self.__data[row][col] == None)
 
-	def get(self,col,row):
+	def GetValue(self,row,col):
 		return self.__data[row][col]
 		
-	def set(self,col,row,val):
+	def SetValue(self,row,col,val):
 		self.__data[row][col]=val
+		
+	def GetColLabelValue(self,col):
+		return self.__col_label[col]
+		
+	def GetRowLabelValue(self,row):
+		return self.__row_label[row]
 
 class GridFrame(wx.Frame): 
 	def __init__(self, parent): 
 		wx.Frame.__init__(self, parent, -1, "A Grid")
 		panel = wx.Panel(self)
-		mygrid = loom_table(panel, 12 , 8)
+		mygrid = wx.grid.Grid(panel)
+		grid_data = loom_table(12 , 8)
+		mygrid.SetTable(grid_data)
 		sizer = wx.BoxSizer(wx.VERTICAL)
 		sizer.Add(mygrid, 1, wx.EXPAND)
 		panel.SetSizer(sizer)
