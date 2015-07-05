@@ -46,7 +46,52 @@ class Loomitem(Model):
 	workers_idworkers = ForeignKey(Workers.idworkers)
 	l_color = Field()
 
-class loom_table(wx.grid.PyGridTableBase):
+class workers_grid(wx.grid.PyGridTableBase):
+	def __init__(self):
+		wx.grid.PyGridTableBase.__init__(self)
+	def Rebuild_data(self):
+		r = Workers.getall()
+		self.workers = [{'idworkers':w.idworkers,'w_name':w.w_name,'w_color':w.w_color} for w in r]
+		self.__num_rows = len(self.workers)
+		self.__num_cols = 2
+		
+	def GetAttr(self, row, col, someExtraParameter ):
+		attr = wx.grid.GridCellAttr()
+		attr.SetReadOnly( 1 )
+		if col == 1:
+			attr.SetBackgroundColour(self.workers[row]['w_color'])
+		return attr
+		
+	def GetNumberRows(self):
+		return self.__num_rows
+		
+	def GetNumberCols(self):
+		return self.__num_cols
+		
+	def IsEmptyCell(self, row, col):
+		return False
+
+	def GetValue(self,row,col):
+		if col == 0:
+			return self.workers[row]['w_name']
+		if col == 1:
+			return self.workers[row]['w_color']
+		return 'Err!'
+		
+	def SetValue(self,row,col,val):
+		pass
+		
+	def GetColLabelValue(self,col):
+		if col == 0:
+			return '姓名'
+		if col == 1:
+			return '颜色'
+		return 'Err!'
+		
+	def GetRowLabelValue(self,row):
+		return self.workers[row]['idworkers']
+		
+class loom_grid(wx.grid.PyGridTableBase):
 	def __init__(self,year,month):
 		wx.grid.PyGridTableBase.__init__(self)
 		self.year = year
@@ -57,12 +102,7 @@ class loom_table(wx.grid.PyGridTableBase):
 		self.date_days = (self.date_to-self.date_from).days + 1
 		self.date_list = [self.date_from + datetime.timedelta(days=w) for w in range(self.date_days)]
 		
-		
-	def __init_database(self):
-		Database.config(host='applepie-atom',db='loom', user='root', passwd='v79762', charset='utf8')
-		
 	def Rebuild_data(self):
-		self.__init_database()
 		r = Workers.getall()
 		self.workers = [{'idworkers':w.idworkers,'w_name':w.w_name,'w_color':w.w_color} for w in r]
 		r = Tables.getall()
@@ -94,20 +134,36 @@ class loom_table(wx.grid.PyGridTableBase):
 	def GetRowLabelValue(self,row):
 		return self.__row_label[row]
 
-class GridFrame(wx.Frame): 
+class WorkersFrame(wx.Frame):
 	def __init__(self, parent): 
-		wx.Frame.__init__(self, parent, -1, "A Grid")
+		wx.Frame.__init__(self, parent, -1, "Workers")
 		panel = wx.Panel(self)
 		mygrid = wx.grid.Grid(panel)
-		grid_data = loom_table(2012,2)
+		grid_data = workers_grid()
 		grid_data.Rebuild_data()
 		mygrid.SetTable(grid_data)
 		sizer = wx.BoxSizer(wx.VERTICAL)
 		sizer.Add(mygrid, 1, wx.EXPAND)
 		panel.SetSizer(sizer)
-        
+
+class GridFrame(wx.Frame): 
+	def __init__(self, parent): 
+		wx.Frame.__init__(self, parent, -1, "A Grid")
+		panel = wx.Panel(self)
+		mygrid = wx.grid.Grid(panel)
+		grid_data = loom_grid(2012,2)
+		grid_data.Rebuild_data()
+		mygrid.SetTable(grid_data)
+		sizer = wx.BoxSizer(wx.VERTICAL)
+		sizer.Add(mygrid, 1, wx.EXPAND)
+		panel.SetSizer(sizer)
+
+	 
 if __name__ == '__main__': 
+	Database.config(host='applepie-atom',db='loom', user='root', passwd='v79762', charset='utf8')
 	app = wx.App()
 	frame = GridFrame(None)
 	frame.Show(True)
+	frame2 = WorkersFrame(frame)
+	frame2.Show(True)
 	app.MainLoop()
