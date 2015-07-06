@@ -5,6 +5,7 @@ import wx.grid
 import datetime
 import calendar
 from skylark import Database, Model, Field, PrimaryKey, ForeignKey, fn, distinct
+from MySQLdb import IntegrityError
 
 class Workers(Model):
 	table_name = 'workers'
@@ -147,11 +148,12 @@ class LoomGridItem():
 		self.need_rebuild = True
 		
 	def Rebuild_data(self):
-		print 'Rebuild_data',self.idtables,self.iddatelines
+		#print 'LoomGridItem.Rebuild_data',self.idtables,self.iddatelines
 		self.need_rebuild = False
 		if self.idtables == None or self.iddatelines == None:
 			self.idworkers = None
 			self.text = ''
+			self.need_rebuild = True
 			return
 		#------------------------------
 		t = Tables.at(self.idtables).getone()
@@ -200,7 +202,15 @@ class LoomGridData(wx.grid.PyGridTableBase):
 		self.__num_rows = self.date_days
 		self.__col_label=[w['t_name'] for w in self.tables]
 		self.__row_label=[str(w) for w in self.date_list]
-		self.__data = [([LoomGridItem(str(self.date_list[i]))] * self.__num_cols) for i in range(self.__num_rows)]
+		self.__data = [([None] * self.__num_cols) for i in range(self.__num_rows)]
+		for r in range(self.__num_rows):
+			for c in range(self.__num_cols):
+				self.__data[r][c] = LoomGridItem(str(self.date_list[r]))
+		for i in self.date_list:
+			try:
+				Datelines.create(iddatelines = i)
+			except IntegrityError:
+				continue
 
 	def GetItem(self,row,col):
 		return self.__data[row][col]
