@@ -132,12 +132,12 @@ class WorkersGridData(wx.grid.PyGridTableBase):
 		
 		
 class LoomGridItem():
-	def __init__(self,iddatelines,text='',color='#FFFFFF',textcolor='#000000'):
+	def __init__(self,iddatelines,idtables,text='',color='#FFFFFF',textcolor='#000000'):
 		self.text = text
 		self.color = color
 		self.textcolor = textcolor
 		self.readonly = True
-		self.idtables = None
+		self.idtables = idtables
 		self.iddatelines = iddatelines
 		self.idworkers = None
 		self.datetime_line = None
@@ -152,6 +152,7 @@ class LoomGridItem():
 		return (self.idworkers == None)
 
 	def SetWorker(self,idworkers):
+		print self.iddatelines, self.idtables,idworkers
 		if self.IsEmpty():
 			Loomitem.create(datelines_iddatelines = self.iddatelines, tables_idtables = self.idtables, workers_idworkers = idworkers)
 		else:
@@ -219,7 +220,7 @@ class LoomGridData(wx.grid.PyGridTableBase):
 		self.__data = [([None] * self.__num_cols) for i in range(self.__num_rows)]
 		for r in range(self.__num_rows):
 			for c in range(self.__num_cols):
-				self.__data[r][c] = LoomGridItem(str(self.date_list[r]))
+				self.__data[r][c] = LoomGridItem(str(self.date_list[r]),self.tables[c]['idtables'])
 		for i in self.date_list:
 			try:
 				Datelines.create(iddatelines = i)
@@ -228,6 +229,28 @@ class LoomGridData(wx.grid.PyGridTableBase):
 
 	def GetItem(self,row,col):
 		return self.__data[row][col]
+		
+	def SearchIdworkers(self,row,col,idworkers):
+		for i in range(row):
+			if self.GetItem(i,col).idworkers == idworkers:
+				print 'found at',i,col
+				return i
+		return None
+		
+	def AutoRepeat(self,row,col):
+		if self.IsEmptyCell(row,col):
+			return None
+		target_idworkers = self.GetItem(row,col).idworkers
+		f = self.SearchIdworkers(row,col,target_idworkers)
+		if f is None:
+			return None
+		else:
+			d = row - f
+			nextrow = row + d
+			while nextrow < self.GetNumberRows():
+				self.GetItem(nextrow,col).SetWorker(target_idworkers)
+				nextrow = nextrow + d
+			return nextrow - d
 
 	def GetNumberRows(self):
 		return self.__num_rows
@@ -236,15 +259,14 @@ class LoomGridData(wx.grid.PyGridTableBase):
 		return self.__num_cols
 		
 	def IsEmptyCell(self, row, col):
-		return False
+		return self.__data[row][col].IsEmpty()
 
 	def GetValue(self,row,col):
 		i = self.__data[row][col]
-		i.idtables = self.tables[col]['idtables']
 		if i.need_rebuild:
 			i.Rebuild_data()
 		return str(self.__data[row][col])
-		
+
 	def SetValue(self,row,col,val):
 		pass
 		
@@ -320,10 +342,17 @@ class LoomGrid(BaseGrid):
 		
 	def GetLoomItem(self,evt):
 		return self.grid_data.GetItem(evt.GetRow(),evt.GetCol())
-		
+
 	def AutoRepeat(self):
-		pass
-			
+		if self.currentSelection['leftcol'] is None:
+			return
+		for c in range(self.currentSelection['leftcol'],self.currentSelection['rightcol']+1):
+			for r in range(self.currentSelection['toprow'],self.currentSelection['bottonrow']+1):
+				BaseGrid.iddatelines = self.grid_data.date_list[r]
+				BaseGrid.idtables = self.grid_data.tables[c]['idtables']
+				self.grid_data.AutoRepeat(r,c)
+		self.ForceRefresh()
+	
 	def OnCellLeftDClick(self, evt):
 		BaseGrid.iddatelines = self.grid_data.date_list[evt.GetRow()]
 		BaseGrid.idtables = self.grid_data.tables[evt.GetCol()]['idtables']
@@ -365,6 +394,7 @@ class GridFrame(wx.Frame):
 		
 		menuTool = wx.Menu()
 		menuItem3 = menuTool.Append(wx.ID_ANY,'自动重复','Auto The Loom')
+		self.Bind(wx.EVT_MENU, self.OnAutoRepeat, menuItem3)
 		
 		menuBar = wx.MenuBar()
 		menuBar.Append(menuFile,'文件')
