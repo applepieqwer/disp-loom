@@ -91,6 +91,20 @@ class WorkersGridData(wx.grid.PyGridTableBase):
 		r = q.execute()
 		return [w.tables_idtables for w in r.all()]
 		
+	def SetWorkerLimit(self,idworkers,idtables):
+		for i in self.workers:
+			if i['idworkers'] == idworkers:		
+				if idtables in i['idtables']:
+					#del
+					Workers_limit_tables.where(tables_idtables=idtables,workers_idworkers=idworkers).delete().execute()
+					i['idtables'].remove(idtables)
+					return False
+				else:
+					#new
+					Workers_limit_tables.create(tables_idtables=idtables,workers_idworkers=idworkers)
+					i['idtables'].append(idtables)
+					return True
+		
 	def GetValue(self,row,col):
 		if col == 0:
 			return self.workers[row]['w_name']
@@ -269,10 +283,17 @@ class WorkersGrid(BaseGrid):
 		self.Bind(wx.grid.EVT_GRID_CELL_LEFT_DCLICK, self.OnCellLeftDClick)
 		
 	def OnCellLeftDClick(self, evt):
-		if evt.GetCol() == 0:
+		col = evt.GetCol()
+		if col == 0:
 			BaseGrid.idworkers = self.grid_data.workers[evt.GetRow()]['idworkers']
-			print 'WorkersGrid Click: %s'%self.grid_data.workers[evt.GetRow()]['w_name']
+			#print 'WorkersGrid Click: %s'%self.grid_data.workers[evt.GetRow()]['w_name']
 			self.ShowIds()
+		elif col == 1:
+			#color
+			pass
+		elif col > 1:
+			self.grid_data.SetWorkerLimit(self.grid_data.workers[evt.GetRow()]['idworkers'],self.grid_data.tables[col-2]['idtables'])
+			self.ForceRefresh()
 		evt.Skip()
 
 class LoomGrid(BaseGrid):
@@ -281,11 +302,28 @@ class LoomGrid(BaseGrid):
 		self.grid_data = LoomGridData(2012,2)
 		self.grid_data.Rebuild_data()
 		self.SetTable(self.grid_data)
+		self.currentSelection = {'toprow':None,'bottonrow':None,'leftcol':None,'rightcol':None}
 		self.Bind(wx.grid.EVT_GRID_CELL_LEFT_DCLICK, self.OnCellLeftDClick)
-
+		self.Bind(wx.grid.EVT_GRID_SELECT_CELL,self._OnSelectedCell)
+		self.Bind(wx.grid.EVT_GRID_RANGE_SELECT,self._OnSelectedRange)
+		
+	def _OnSelectedRange(self,evt):
+		if evt.Selecting():
+			self.currentSelection = {'toprow':evt.GetTopRow(),'bottonrow':evt.GetBottomRow(),'leftcol':evt.GetLeftCol(),'rightcol':evt.GetRightCol()}
+			print self.currentSelection
+		evt.Skip()
+		
+	def _OnSelectedCell(self,evt):
+		self.currentSelection = {'toprow':evt.GetRow(),'bottonrow':evt.GetRow(),'leftcol':evt.GetCol(),'rightcol':evt.GetCol()}
+		print self.currentSelection
+		evt.Skip()
+		
 	def GetLoomItem(self,evt):
 		return self.grid_data.GetItem(evt.GetRow(),evt.GetCol())
 		
+	def AutoRepeat(self):
+		pass
+			
 	def OnCellLeftDClick(self, evt):
 		BaseGrid.iddatelines = self.grid_data.date_list[evt.GetRow()]
 		BaseGrid.idtables = self.grid_data.tables[evt.GetCol()]['idtables']
@@ -300,27 +338,57 @@ class LoomGrid(BaseGrid):
 
 class WorkersFrame(wx.Frame):
 	def __init__(self, parent): 
-		wx.Frame.__init__(self, parent, -1, "Workers")
+		wx.Frame.__init__(self, parent, title="签派员列表",size=(500,500))
 		panel = wx.Panel(self)
 		mygrid = WorkersGrid(panel)
 		sizer = wx.BoxSizer(wx.VERTICAL)
 		sizer.Add(mygrid, 1, wx.EXPAND)
 		panel.SetSizer(sizer)
+		self.Bind(wx.EVT_CLOSE,self.OnClose)
+		
+	def OnClose(self,evt):
+		self.Hide()
 
 class GridFrame(wx.Frame): 
 	def __init__(self, parent): 
-		wx.Frame.__init__(self, parent, -1, "This is a Loom")
-		panel = wx.Panel(self)
-		mygrid = LoomGrid(panel)
-		sizer = wx.BoxSizer(wx.VERTICAL)
-		sizer.Add(mygrid, 1, wx.EXPAND)
-		panel.SetSizer(sizer)
+		wx.Frame.__init__(self, parent, title="This is a Loom",size=(800,800))
+		self.CreateStatusBar()
+		self.mygrid = LoomGrid(self)
+		#menu
+		menuFile = wx.Menu()
+		menuItem1 = menuFile.Append(wx.ID_EXIT,'退出')
+		self.Bind(wx.EVT_MENU, self.OnExit, menuItem1)
+		
+		menuFrame = wx.Menu()
+		menuItem2 = menuFrame.Append(wx.ID_ANY,'签派员列表','List Of Dispatchers')
+		self.Bind(wx.EVT_MENU, self.OnWorkers, menuItem2)
+		
+		menuTool = wx.Menu()
+		menuItem3 = menuTool.Append(wx.ID_ANY,'自动重复','Auto The Loom')
+		
+		menuBar = wx.MenuBar()
+		menuBar.Append(menuFile,'文件')
+		menuBar.Append(menuTool,'工具')
+		menuBar.Append(menuFrame,'窗口')
+		self.SetMenuBar(menuBar)
+		#sub frames
+		self.workers_frame = WorkersFrame(self)
+		#show frames
+		self.Show(True)
+		self.workers_frame.Show(True)
+		
+	def OnAutoRepeat(self,evt):
+		self.mygrid.AutoRepeat()
+		
+	def OnWorkers(self,evt):
+		self.workers_frame.Show(True)
+
+	def OnExit(self,evt):
+		self.workers_frame.Close()
+		self.Close()
 
 if __name__ == '__main__': 
 	Database.config(host='applepie-atom',db='loom', user='root', passwd='v79762', charset='utf8')
 	app = wx.App()
-	frame = WorkersFrame(None)
-	frame.Show(True)
-	frame2 = GridFrame(frame)
-	frame2.Show(True)
+	mainFrame = GridFrame(None)
 	app.MainLoop()
