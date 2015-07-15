@@ -152,9 +152,12 @@ class LoomGridItem():
 		return (self.idworkers == None)
 
 	def SetWorker(self,idworkers):
-		print self.iddatelines, self.idtables,idworkers
+		#print self.iddatelines, self.idtables,idworkers
 		if self.IsEmpty():
-			Loomitem.create(datelines_iddatelines = self.iddatelines, tables_idtables = self.idtables, workers_idworkers = idworkers)
+			try:
+				Loomitem.create(datelines_iddatelines = self.iddatelines, tables_idtables = self.idtables, workers_idworkers = idworkers)
+			except IntegrityError:
+				pass
 		else:
 			if idworkers == self.idworkers:
 				return
@@ -233,7 +236,7 @@ class LoomGridData(wx.grid.PyGridTableBase):
 	def SearchIdworkers(self,row,col,idworkers):
 		for i in range(row):
 			if self.GetItem(i,col).idworkers == idworkers:
-				print 'found at',i,col
+				#print 'found at',i,col
 				return i
 		return None
 		
