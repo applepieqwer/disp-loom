@@ -281,6 +281,14 @@ class LoomGridData(wx.grid.PyGridTableBase):
 				nextrow = nextrow + d
 			return nextrow - d
 
+	def ClearIllegalReason(self):
+#		清除所有错误信息
+		for r in range(self.__num_rows):
+			for c in range(self.__num_cols):
+				i = self.__data[r][c]
+				i.legal = True
+				i.illegal_reason = ['','','']
+
 	def CheckOne(self):
 #		检查席位的合法性
 		for r in range(self.__num_rows):
@@ -319,9 +327,14 @@ class LoomGridData(wx.grid.PyGridTableBase):
 					if f > d[2] and f<= d[3]:
 						##find illegal
 						##let's mark 2 items illegal:
-						self.__data[workers_list[k][i][0]][workers_list[k][i][1]].legal = False
-						self.__data[d[0]][d[1]].legal = False
-						
+						i1 = self.__data[workers_list[k][i][0]][workers_list[k][i][1]]
+						i2 = self.__data[d[0]][d[1]]
+						i1.legal = False
+						i1.illegal_reason[1] = '常规时间检查（错误）：%s “%s”的“%s”与%s “%s”的“%s”冲突'%(str(i1.datetime_from).encode('utf8'),i1.text.encode('utf8'),i1.t_name.encode('utf8'),str(i2.datetime_from).encode('utf8'),i2.text.encode('utf8'),i2.t_name.encode('utf8'))
+						i2.legal = False
+						i2.illegal_reason[1] = '常规时间检查（错误）：%s “%s”的“%s”与%s “%s”的“%s”冲突'%(str(i2.datetime_from).encode('utf8'),i2.text.encode('utf8'),i2.t_name.encode('utf8'),str(i1.datetime_from).encode('utf8'),i1.text.encode('utf8'),i1.t_name.encode('utf8'))
+						print i1.illegal_reason[1]
+						print i2.illegal_reason[1]
 					
 				
 
