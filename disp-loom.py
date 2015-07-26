@@ -138,13 +138,16 @@ class LoomGridItem():
 		self.textcolor = textcolor
 		self.readonly = True
 		self.idtables = idtables
+		self.t_name = ''
 		self.iddatelines = iddatelines
 		self.idworkers = None
 		self.datetime_line = None
 		self.datetime_from = None
 		self.datetime_to = None
 		self.need_rebuild = True
-
+		self.legal = True
+		self.illegal_reason = ['','','']#three rules,three reasons
+		
 	def Dump(self):
 		return  'LoomGridItem.Dump:\n datetime = %s\n datetime_from = %s\n datetime_to = %s\n idtables = %s\n idworkers = %s\n text = %s\n color = %s\n need_rebuild = %s'%(self.datetime_line,self.datetime_from,self.datetime_to,self.idtables,self.idworkers,self.text,self.color,self.need_rebuild)
 
@@ -164,6 +167,7 @@ class LoomGridItem():
 			q = Loomitem.where(datelines_iddatelines = self.iddatelines , tables_idtables = self.idtables).update(workers_idworkers = idworkers).limit(1)
 			q.execute()
 		self.need_rebuild = True
+		self.CheckOne()
 		
 	def Rebuild_data(self):
 		#print 'LoomGridItem.Rebuild_data',self.idtables,self.iddatelines
@@ -171,11 +175,12 @@ class LoomGridItem():
 		if self.idtables == None or self.iddatelines == None:
 			self.idworkers = None
 			self.text = ''
+			self.t_name = ''
 			self.need_rebuild = True
 			return
 		#------------------------------
 		t = Tables.at(self.idtables).getone()
-		
+		self.t_name = t.t_name
 		self.datetime_line =  datetime.datetime.strptime(self.iddatelines,'%Y-%m-%d') 
 		self.datetime_from = self.datetime_line + t.t_open
 		self.datetime_to = self.datetime_line + t.t_close
@@ -195,7 +200,28 @@ class LoomGridItem():
 			self.idworkers = None
 			self.text = ''
 			return
-		
+	
+	def CheckOne(self):
+#		检查席位的合法性
+		if self.need_rebuild:
+			self.Rebuild_data()
+		if self.idworkers == None:
+			self.legal = True
+			self.illegal_reason[0] = ''
+			return True
+		q = Workers_limit_tables.where(tables_idtables=self.idtables,workers_idworkers=self.idworkers).limit(1).select(Workers_limit_tables.tables_idtables,Workers_limit_tables.workers_idworkers)
+#		print q.sql
+		r = q.execute()
+		if r.count > 0:
+			self.legal = True
+			self.illegal_reason[0] = 'Pass'
+			return True
+		else:
+			self.legal = False
+			self.illegal_reason[0] = '席位符合性检查（错误）：%s “%s”无法工作在“%s”'%(str(self.datetime_from).encode('utf8'),self.text.encode('utf8'),self.t_name.encode('utf8'))
+			print self.illegal_reason[0]
+			return False
+	
 	def __str__(self):
 		return self.text.encode('utf8')
 
@@ -255,6 +281,50 @@ class LoomGridData(wx.grid.PyGridTableBase):
 				nextrow = nextrow + d
 			return nextrow - d
 
+	def CheckOne(self):
+#		检查席位的合法性
+		for r in range(self.__num_rows):
+			for c in range(self.__num_cols):
+				i = self.__data[r][c]
+				if i.need_rebuild:
+					i.Rebuild_data()
+				if i.IsEmpty():
+					continue
+				i.CheckOne()
+				
+	def CheckTwo(self):
+#		检查一般劳动时间限制
+		workers_list = {}
+		for r in range(self.__num_rows):
+			for c in range(self.__num_cols):
+				i = self.__data[r][c]
+				if i.need_rebuild:
+					i.Rebuild_data()
+				if i.IsEmpty():
+					continue
+				if i.idworkers in workers_list.keys():
+					workers_list[i.idworkers].append(list((r,c,i.datetime_from,i.datetime_to)))
+				else:
+					workers_list[i.idworkers] = [list((r,c,i.datetime_from,i.datetime_to))]
+#		print workers_list
+		for k in workers_list.keys():
+			#for every worker
+			for i in range(len(workers_list[k])):
+				#for every item
+				#get datetimefrom #1
+				f = workers_list[k][i][2]
+				for d in workers_list[k]:
+					#for every item
+					#compare datetimefrom  and datetimeto
+					if f > d[2] and f<= d[3]:
+						##find illegal
+						##let's mark 2 items illegal:
+						self.__data[workers_list[k][i][0]][workers_list[k][i][1]].legal = False
+						self.__data[d[0]][d[1]].legal = False
+						
+					
+				
+
 	def GetNumberRows(self):
 		return self.__num_rows
 		
@@ -281,12 +351,15 @@ class LoomGridData(wx.grid.PyGridTableBase):
 		
 	def GetAttr(self, row, col, someExtraParameter ):
 		i = self.__data[row][col]
-		i.idtables = self.tables[col]['idtables']
+#		i.idtables = self.tables[col]['idtables']
 		if i.need_rebuild:
 			i.Rebuild_data()
 		attr = wx.grid.GridCellAttr()
 		attr.SetReadOnly(self.__data[row][col].readonly)
-		attr.SetBackgroundColour(self.__data[row][col].color)
+		if not self.__data[row][col].legal:
+			attr.SetBackgroundColour('#FF0000')
+		else:
+			attr.SetBackgroundColour(self.__data[row][col].color)
 		attr.SetTextColour(self.__data[row][col].textcolor)
 		return attr
 
@@ -355,6 +428,11 @@ class LoomGrid(BaseGrid):
 				BaseGrid.idtables = self.grid_data.tables[c]['idtables']
 				self.grid_data.AutoRepeat(r,c)
 		self.ForceRefresh()
+
+	def Check(self):
+		self.grid_data.CheckOne()
+		self.grid_data.CheckTwo()
+		self.ForceRefresh()
 	
 	def OnCellLeftDClick(self, evt):
 		BaseGrid.iddatelines = self.grid_data.date_list[evt.GetRow()]
@@ -398,6 +476,8 @@ class GridFrame(wx.Frame):
 		menuTool = wx.Menu()
 		menuItem3 = menuTool.Append(wx.ID_ANY,'自动重复','Auto The Loom')
 		self.Bind(wx.EVT_MENU, self.OnAutoRepeat, menuItem3)
+		menuItem4 = menuTool.Append(wx.ID_ANY,'检查合法性','Check!')
+		self.Bind(wx.EVT_MENU, self.OnCheck, menuItem4)
 		
 		menuBar = wx.MenuBar()
 		menuBar.Append(menuFile,'文件')
@@ -409,6 +489,9 @@ class GridFrame(wx.Frame):
 		#show frames
 		self.Show(True)
 		self.workers_frame.Show(True)
+		
+	def OnCheck(self,evt):
+		self.mygrid.Check()
 		
 	def OnAutoRepeat(self,evt):
 		self.mygrid.AutoRepeat()
