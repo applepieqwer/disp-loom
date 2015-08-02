@@ -4,8 +4,12 @@ import wx
 import wx.grid 
 import datetime
 import calendar
+import sqlite3
 from skylark import Database, Model, Field, PrimaryKey, ForeignKey, fn, distinct
-from MySQLdb import IntegrityError
+#from MySQLdb import IntegrityError
+from sqlite3 import IntegrityError
+
+Database.set_dbapi(sqlite3)
 
 class Workers(Model):
 	table_name = 'workers'
@@ -182,6 +186,12 @@ class LoomGridItem():
 		t = Tables.at(self.idtables).getone()
 		self.t_name = t.t_name
 		self.datetime_line =  datetime.datetime.strptime(self.iddatelines,'%Y-%m-%d') 
+		if type(t.t_open) == unicode:
+			tempsplit = t.t_open.split(':')
+			t.t_open = datetime.timedelta(hours=int(tempsplit[0]),minutes=int(tempsplit[1]),seconds=int(tempsplit[2]))
+		if type(t.t_close) == unicode:
+			tempsplit = t.t_close.split(':')
+			t.t_close = datetime.timedelta(hours=int(tempsplit[0]),minutes=int(tempsplit[1]),seconds=int(tempsplit[2]))
 		self.datetime_from = self.datetime_line + t.t_open
 		self.datetime_to = self.datetime_line + t.t_close
 		
@@ -393,6 +403,12 @@ class WorkersGrid(BaseGrid):
 		self.SetTable(self.grid_data)
 		self.Bind(wx.grid.EVT_GRID_CELL_LEFT_DCLICK, self.OnCellLeftDClick)
 		
+	def NewDisp(self,name,color='#FFFFFF'):
+		Workers.create(w_name=name.strip(),w_color=color.strip())
+		self.grid_data.Rebuild_data()
+		self.SetTable(self.grid_data)
+		self.ForceRefresh()
+		
 	def OnCellLeftDClick(self, evt):
 		col = evt.GetCol()
 		if col == 0:
@@ -463,11 +479,24 @@ class WorkersFrame(wx.Frame):
 	def __init__(self, parent): 
 		wx.Frame.__init__(self, parent, title="签派员列表",size=(500,500))
 		panel = wx.Panel(self)
-		mygrid = WorkersGrid(panel)
+		self.mygrid = WorkersGrid(panel)
 		sizer = wx.BoxSizer(wx.VERTICAL)
-		sizer.Add(mygrid, 1, wx.EXPAND)
+		sizer.Add(self.mygrid , 1, wx.EXPAND)
 		panel.SetSizer(sizer)
 		self.Bind(wx.EVT_CLOSE,self.OnClose)
+		menuFile = wx.Menu()
+		menuItem0 = menuFile.Append(wx.ID_ANY,'新建签派员','New Dispatchers')
+		self.Bind(wx.EVT_MENU, self.OnNewDisp, menuItem0)
+		menuItem1 = menuFile.Append(wx.ID_EXIT,'退出')
+		self.Bind(wx.EVT_MENU, self.OnClose, menuItem1)
+		menuBar = wx.MenuBar()
+		menuBar.Append(menuFile,'文件')
+		self.SetMenuBar(menuBar)
+		
+	def OnNewDisp(self,evt):
+		new_disp = wx.GetTextFromUser('输入新签派员姓名', caption='输入新签派员姓名',default_value='', parent=self).strip()
+		if len(new_disp)>0:
+			self.mygrid.NewDisp(new_disp)
 		
 	def OnClose(self,evt):
 		self.Hide()
@@ -517,7 +546,8 @@ class GridFrame(wx.Frame):
 		self.Close()
 
 if __name__ == '__main__': 
-	Database.config(host='applepie-atom',db='loom', user='root', passwd='v79762', charset='utf8')
+#	Database.config(host='applepie-atom',db='loom', user='root', passwd='v79762', charset='utf8')
+	Database.config(db='loom.db')
 	app = wx.App()
 	mainFrame = GridFrame(None)
 	app.MainLoop()
