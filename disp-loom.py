@@ -155,6 +155,16 @@ class LoomGridItem():
 	def Dump(self):
 		return  'LoomGridItem.Dump:\n datetime = %s\n datetime_from = %s\n datetime_to = %s\n idtables = %s\n idworkers = %s\n text = %s\n color = %s\n need_rebuild = %s'%(self.datetime_line,self.datetime_from,self.datetime_to,self.idtables,self.idworkers,self.text,self.color,self.need_rebuild)
 
+	def Del(self):
+		if self.IsEmpty():
+			return
+		else:
+			q = Loomitem.where(datelines_iddatelines = self.iddatelines , tables_idtables = self.idtables).delete()
+			q.execute()
+			self.need_rebuild = True
+			self.Rebuild_data()
+			print self.Dump()
+
 	def IsEmpty(self):
 		return (self.idworkers == None)
 
@@ -209,6 +219,10 @@ class LoomGridItem():
 		else:
 			self.idworkers = None
 			self.text = ''
+			self.color = '#FFFFFF'
+			self.textcolor = '#000000'
+			self.legal = True
+			self.illegal_reason = ['','','']
 			return
 	
 	def CheckOne(self):
@@ -403,6 +417,9 @@ class WorkersGrid(BaseGrid):
 		self.SetTable(self.grid_data)
 		self.Bind(wx.grid.EVT_GRID_CELL_LEFT_DCLICK, self.OnCellLeftDClick)
 		
+	def Rebuild_data(self):
+		self.grid_data.Rebuild_data()
+		
 	def NewDisp(self,name,color='#FFFFFF'):
 		Workers.create(w_name=name.strip(),w_color=color.strip())
 		self.grid_data.Rebuild_data()
@@ -417,7 +434,14 @@ class WorkersGrid(BaseGrid):
 			self.ShowIds()
 		elif col == 1:
 			#color
-			pass
+			BaseGrid.idworkers = self.grid_data.workers[evt.GetRow()]['idworkers']
+			dlg = wx.ColourDialog(self)
+			dlg.GetColourData().SetChooseFull(True)
+			if dlg.ShowModal() == wx.ID_OK:
+				color = dlg.GetColourData().GetColour().GetAsString(flags=wx.C2S_HTML_SYNTAX)
+				Workers.where(idworkers=BaseGrid.idworkers).update(w_color=color).execute()
+				self.grid_data.Rebuild_data()
+				self.ForceRefresh()
 		elif col > 1:
 			self.grid_data.SetWorkerLimit(self.grid_data.workers[evt.GetRow()]['idworkers'],self.grid_data.tables[col-2]['idtables'])
 			self.ForceRefresh()
@@ -434,6 +458,12 @@ class LoomGrid(BaseGrid):
 		self.Bind(wx.grid.EVT_GRID_SELECT_CELL,self._OnSelectedCell)
 		self.Bind(wx.grid.EVT_GRID_RANGE_SELECT,self._OnSelectedRange)
 		
+	def Del(self):
+		if self.currentSelection['toprow'] is None or self.currentSelection['leftcol'] is None:
+			return
+		self.grid_data.GetItem(self.currentSelection['toprow'],self.currentSelection['leftcol']).Del()
+		self.ForceRefresh()
+	
 	def _OnSelectedRange(self,evt):
 		if evt.Selecting():
 			self.currentSelection = {'toprow':evt.GetTopRow(),'bottonrow':evt.GetBottomRow(),'leftcol':evt.GetLeftCol(),'rightcol':evt.GetRightCol()}
@@ -458,6 +488,9 @@ class LoomGrid(BaseGrid):
 				self.grid_data.AutoRepeat(r,c)
 		self.ForceRefresh()
 
+	def Rebuild_data(self):
+		self.grid_data.Rebuild_data()
+		
 	def Check(self):
 		self.grid_data.CheckOne()
 		self.grid_data.CheckTwo()
@@ -500,6 +533,12 @@ class WorkersFrame(wx.Frame):
 		
 	def OnClose(self,evt):
 		self.Hide()
+	
+	def Rebuild_data(self):
+		self.mygrid.Rebuild_data()
+		
+	def ForceRefresh(self):
+		self.mygrid.ForceRefresh()
 
 class GridFrame(wx.Frame): 
 	def __init__(self, parent): 
@@ -516,10 +555,14 @@ class GridFrame(wx.Frame):
 		self.Bind(wx.EVT_MENU, self.OnWorkers, menuItem2)
 		
 		menuTool = wx.Menu()
+		menuItem6 = menuTool.Append(wx.ID_ANY,'删除','Del!')
+		self.Bind(wx.EVT_MENU, self.OnDel, menuItem6)
 		menuItem3 = menuTool.Append(wx.ID_ANY,'自动重复','Auto The Loom')
 		self.Bind(wx.EVT_MENU, self.OnAutoRepeat, menuItem3)
 		menuItem4 = menuTool.Append(wx.ID_ANY,'检查合法性','Check!')
 		self.Bind(wx.EVT_MENU, self.OnCheck, menuItem4)
+		menuItem5 = menuTool.Append(wx.ID_ANY,'刷新','Refresh!')
+		self.Bind(wx.EVT_MENU, self.OnRefresh, menuItem5)
 		
 		menuBar = wx.MenuBar()
 		menuBar.Append(menuFile,'文件')
@@ -532,6 +575,9 @@ class GridFrame(wx.Frame):
 		self.Show(True)
 		self.workers_frame.Show(True)
 		
+	def OnDel(self,evt):
+		self.mygrid.Del()
+		
 	def OnCheck(self,evt):
 		self.mygrid.Check()
 		
@@ -540,6 +586,12 @@ class GridFrame(wx.Frame):
 		
 	def OnWorkers(self,evt):
 		self.workers_frame.Show(True)
+
+	def OnRefresh(self,evt):
+		self.mygrid.Rebuild_data()
+		self.mygrid.ForceRefresh()
+		self.workers_frame.Rebuild_data()
+		self.workers_frame.ForceRefresh()
 
 	def OnExit(self,evt):
 		self.workers_frame.Close()
