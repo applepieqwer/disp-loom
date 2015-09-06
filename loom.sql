@@ -54,16 +54,16 @@ CREATE TABLE "tables" (
   "t_open" time NOT NULL,
   "t_close" time NOT NULL,
   "t_can_empty" tinyint(1) NOT NULL DEFAULT '0',
-  "t_disp_rule" tinyint(1) NOT NULL DEFAULT '1',
+  "t_disp_rule" time NOT NULL DEFAULT '00:00:00',
   "t_order" int(11) NOT NULL DEFAULT '10'
 );
-INSERT INTO "tables" VALUES(1,'签派带班','08:30:00','32:45:00',0,0,10);
-INSERT INTO "tables" VALUES(2,'7010中班','13:00:00','22:10:00',0,1,10);
-INSERT INTO "tables" VALUES(3,'7018中班','13:00:00','22:10:00',0,1,10);
-INSERT INTO "tables" VALUES(4,'7010早班','06:10:00','13:10:00',0,1,10);
-INSERT INTO "tables" VALUES(5,'7018早班','06:10:00','13:10:00',0,1,10);
-INSERT INTO "tables" VALUES(6,'7018守夜','22:00:00','30:20:00',0,1,10);
-INSERT INTO "tables" VALUES(7,'7018备份','22:00:00','30:20:00',1,1,10);
+INSERT INTO "tables" VALUES(1,'签派带班','08:30:00','32:45:00',0,'00:00:00',10);
+INSERT INTO "tables" VALUES(2,'7010中班','13:00:00','22:10:00',0,'09:10:00',10);
+INSERT INTO "tables" VALUES(3,'7018中班','13:00:00','22:10:00',0,'09:10:00',10);
+INSERT INTO "tables" VALUES(4,'7010早班','06:10:00','13:10:00',0,'07:00:00',10);
+INSERT INTO "tables" VALUES(5,'7018早班','06:10:00','13:10:00',0,'07:00:00',10);
+INSERT INTO "tables" VALUES(6,'7018守夜','22:00:00','30:20:00',0,'08:20:00',10);
+INSERT INTO "tables" VALUES(7,'7018备份','22:00:00','30:20:00',1,'08:20:00',10);
 CREATE TABLE "workers" (
   "idworkers" INTEGER PRIMARY KEY AUTOINCREMENT,
   "w_name" varchar(45) NOT NULL,

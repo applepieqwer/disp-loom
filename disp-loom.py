@@ -151,9 +151,13 @@ class LoomGridItem():
 		self.need_rebuild = True
 		self.legal = True
 		self.illegal_reason = ['','','']#three rules,three reasons
+		t = Tables.findone(idtables=self.idtables)
+		self.t_can_empty = t.t_can_empty
+		self.t_disp_rule = None
+		self.t_name = t.t_name
 		
 	def Dump(self):
-		return  'LoomGridItem.Dump:\n datetime = %s\n datetime_from = %s\n datetime_to = %s\n idtables = %s\n idworkers = %s\n text = %s\n color = %s\n need_rebuild = %s'%(self.datetime_line,self.datetime_from,self.datetime_to,self.idtables,self.idworkers,self.text,self.color,self.need_rebuild)
+		return  'LoomGridItem.Dump:\n datetime = %s\n datetime_from = %s\n datetime_to = %s\n idtables = %s\n idworkers = %s\n text = %s\n color = %s\n need_rebuild = %s\n t_disp_rule = %s\n legal = %s\n illegal_reason[0] = %s\n illegal_reason[1] = %s\n illegal_reason[2] = %s'.decode('utf8')%(self.datetime_line,self.datetime_from,self.datetime_to,self.idtables,self.idworkers,self.text,self.color,self.need_rebuild,str(self.t_disp_rule),str(self.legal),self.illegal_reason[0],self.illegal_reason[1],self.illegal_reason[2])
 
 	def Del(self):
 		if self.IsEmpty():
@@ -194,7 +198,6 @@ class LoomGridItem():
 			return
 		#------------------------------
 		t = Tables.at(self.idtables).getone()
-		self.t_name = t.t_name
 		self.datetime_line =  datetime.datetime.strptime(self.iddatelines,'%Y-%m-%d') 
 		if type(t.t_open) == unicode:
 			tempsplit = t.t_open.split(':')
@@ -205,6 +208,12 @@ class LoomGridItem():
 		self.datetime_from = self.datetime_line + t.t_open
 		self.datetime_to = self.datetime_line + t.t_close
 		
+		if type(t.t_disp_rule) == unicode:
+			tempsplit = t.t_disp_rule.split(':')
+			self.t_disp_rule = datetime.timedelta(hours=int(tempsplit[0]),minutes=int(tempsplit[1]),seconds=int(tempsplit[2]))
+		else:
+			self.t_disp_rule  = t.t_disp_rule
+
 		q = Loomitem.where(datelines_iddatelines = self.iddatelines , tables_idtables = self.idtables).limit(1).select(Loomitem.workers_idworkers,Loomitem.l_color)
 		r = q.execute()
 		if r.count > 0:
@@ -229,10 +238,15 @@ class LoomGridItem():
 #		检查席位的合法性
 		if self.need_rebuild:
 			self.Rebuild_data()
-		if self.idworkers == None:
-			self.legal = True
-			self.illegal_reason[0] = ''
-			return True
+		if self.IsEmpty():
+			if self.t_can_empty:
+				self.legal = True
+				self.illegal_reason[0] = ''
+				return True
+			else:
+				self.legal = False
+				self.illegal_reason[0] = '席位符合性检查（错误）：%s “%s”不能为空'.decode('utf8')%(str(self.datetime_from),self.t_name)
+				return False
 		q = Workers_limit_tables.where(tables_idtables=self.idtables,workers_idworkers=self.idworkers).limit(1).select(Workers_limit_tables.tables_idtables,Workers_limit_tables.workers_idworkers)
 #		print q.sql
 		r = q.execute()
@@ -242,7 +256,7 @@ class LoomGridItem():
 			return True
 		else:
 			self.legal = False
-			self.illegal_reason[0] = '席位符合性检查（错误）：%s “%s”无法工作在“%s”'%(str(self.datetime_from).encode('utf8'),self.text.encode('utf8'),self.t_name.encode('utf8'))
+			self.illegal_reason[0] = '席位符合性检查（错误）：%s “%s”无法工作在“%s”'.decode('utf8')%(str(self.datetime_from),self.text,self.t_name)
 			print self.illegal_reason[0]
 			return False
 	
@@ -320,8 +334,6 @@ class LoomGridData(wx.grid.PyGridTableBase):
 				i = self.__data[r][c]
 				if i.need_rebuild:
 					i.Rebuild_data()
-				if i.IsEmpty():
-					continue
 				i.CheckOne()
 				
 	def CheckTwo(self):
@@ -354,13 +366,95 @@ class LoomGridData(wx.grid.PyGridTableBase):
 						i1 = self.__data[workers_list[k][i][0]][workers_list[k][i][1]]
 						i2 = self.__data[d[0]][d[1]]
 						i1.legal = False
-						i1.illegal_reason[1] = '常规时间检查（错误）：%s “%s”的“%s”与%s “%s”的“%s”冲突'%(str(i1.datetime_from).encode('utf8'),i1.text.encode('utf8'),i1.t_name.encode('utf8'),str(i2.datetime_from).encode('utf8'),i2.text.encode('utf8'),i2.t_name.encode('utf8'))
+						i1.illegal_reason[1] = '常规时间检查（错误）：%s “%s”的“%s”与%s “%s”的“%s”冲突'.decode('utf8')%(str(i1.datetime_from),i1.text,i1.t_name,str(i2.datetime_from),i2.text,i2.t_name)
 						i2.legal = False
-						i2.illegal_reason[1] = '常规时间检查（错误）：%s “%s”的“%s”与%s “%s”的“%s”冲突'%(str(i2.datetime_from).encode('utf8'),i2.text.encode('utf8'),i2.t_name.encode('utf8'),str(i1.datetime_from).encode('utf8'),i1.text.encode('utf8'),i1.t_name.encode('utf8'))
+						i2.illegal_reason[1] = '常规时间检查（错误）：%s “%s”的“%s”与%s “%s”的“%s”冲突'.decode('utf8')%(str(i2.datetime_from),i2.text,i2.t_name,str(i1.datetime_from),i1.text,i1.t_name)
 						print i1.illegal_reason[1]
 						print i2.illegal_reason[1]
+					else:
+						i1 = self.__data[workers_list[k][i][0]][workers_list[k][i][1]]
+						if i1.legal:
+							i1.illegal_reason[1]  = 'Pass'
 					
-				
+	def CheckThree(self):
+		#max = 10 hours and 24x7 hours
+		max_10 = datetime.timedelta(hours = 10)
+		max_24x7 = datetime.timedelta(days = 7)
+		#8 hours and 24 hours
+		td8 = datetime.timedelta(hours = 8)
+		td24 = datetime.timedelta(hours = 24)
+		
+#		检查签派时间
+		workers_list = {}
+		for r in range(self.__num_rows):
+			for c in range(self.__num_cols):
+				i = self.__data[r][c]
+				if i.need_rebuild:
+					i.Rebuild_data()
+				if i.IsEmpty():
+					continue
+				if i.idworkers in workers_list.keys():
+					workers_list[i.idworkers].append(list((r,c,i.datetime_from,i.datetime_to,i.t_disp_rule)))
+				else:
+					workers_list[i.idworkers] = [list((r,c,i.datetime_from,i.datetime_to,i.t_disp_rule))]
+		for i in workers_list.keys():
+			workers_list[i].sort(key=lambda x:x[2])
+			#print workers_list[i]
+			c = len(workers_list[i])
+			
+			#检查连续24小时内工作满10小时前休息连续的8小时。
+			prev_k = 0
+			first_k = 0
+			W = datetime.timedelta(0)
+			R= datetime.timedelta(0)
+			for k in range(c):
+				first_k_workfrom, first_k_workto, first_k_disprule = workers_list[i][first_k][2:]
+				prev_k_workfrom, prev_k_workto, prev_k_disprule = workers_list[i][prev_k][2:]
+				k_workfrom, k_workto, k_disprule = workers_list[i][k][2:]
+				if k_workto - first_k_workto > td24:
+					W = W - first_k_disprule
+					first_k = first_k + 1
+				if prev_k != k:
+					R = k_workfrom - prev_k_workto
+				if R >= td8:
+					W = datetime.timedelta(0)
+					first_k = k
+					prev_k = k
+					continue
+				W = W + k_disprule
+				if W > max_10:
+					##illegal
+					i1 = self.__data[workers_list[i][k][0]][workers_list[i][k][1]]
+					i1.legal = False
+					i1.illegal_reason[2] = '执勤时间检查（错误）：%s “%s”的“%s”不满足24小时内工作10小时休息8小时要求'.decode('utf8')%(str(i1.datetime_from),i1.text,i1.t_name)
+				else:
+					prev_k = k
+					
+			#检查连续24*7小时内休息连续的24小时。
+			first_k = 0
+			prev_k = 0
+			R= datetime.timedelta(0)
+			for k in range(c):
+				first_k_workfrom, first_k_workto, first_k_disprule = workers_list[i][first_k][2:]
+				prev_k_workfrom, prev_k_workto, prev_k_disprule = workers_list[i][prev_k][2:]
+				k_workfrom, k_workto, k_disprule = workers_list[i][k][2:]
+				if prev_k != k:
+					R = k_workfrom - prev_k_workto
+				if R >= td24:
+					print str(R)
+					prev_k = k
+					first_k = k
+					continue
+				print k_workto - first_k_workfrom
+				if k_workto - first_k_workfrom > max_24x7:
+					##illegal
+					i1 = self.__data[workers_list[i][k][0]][workers_list[i][k][1]]
+					i1.legal = False
+					i1.illegal_reason[2] = '执勤时间检查（错误）：%s “%s”的“%s”不满足7个工作日内休息24小时要求'.decode('utf8')%(str(i1.datetime_from),i1.text,i1.t_name)
+				else:
+					prev_k = k
+					i1 = self.__data[workers_list[i][k][0]][workers_list[i][k][1]]
+					i1.illegal_reason[2] = 'Pass'
 
 	def GetNumberRows(self):
 		return self.__num_rows
@@ -458,6 +552,12 @@ class LoomGrid(BaseGrid):
 		self.Bind(wx.grid.EVT_GRID_SELECT_CELL,self._OnSelectedCell)
 		self.Bind(wx.grid.EVT_GRID_RANGE_SELECT,self._OnSelectedRange)
 		
+	def Info(self):
+		if self.currentSelection['toprow'] is None or self.currentSelection['leftcol'] is None:
+			print 'No selection,Plz select a item.'
+			return
+		print self.grid_data.GetItem(self.currentSelection['toprow'],self.currentSelection['leftcol']).Dump()
+		
 	def Del(self):
 		if self.currentSelection['toprow'] is None or self.currentSelection['leftcol'] is None:
 			return
@@ -494,6 +594,7 @@ class LoomGrid(BaseGrid):
 	def Check(self):
 		self.grid_data.CheckOne()
 		self.grid_data.CheckTwo()
+		self.grid_data.CheckThree()
 		self.ForceRefresh()
 	
 	def OnCellLeftDClick(self, evt):
@@ -563,6 +664,8 @@ class GridFrame(wx.Frame):
 		self.Bind(wx.EVT_MENU, self.OnCheck, menuItem4)
 		menuItem5 = menuTool.Append(wx.ID_ANY,'刷新','Refresh!')
 		self.Bind(wx.EVT_MENU, self.OnRefresh, menuItem5)
+		menuItem6 = menuTool.Append(wx.ID_ANY,'显示单元格信息','Info!')
+		self.Bind(wx.EVT_MENU, self.OnInfo, menuItem6)
 		
 		menuBar = wx.MenuBar()
 		menuBar.Append(menuFile,'文件')
@@ -574,6 +677,9 @@ class GridFrame(wx.Frame):
 		#show frames
 		self.Show(True)
 		self.workers_frame.Show(True)
+		
+	def OnInfo(self,evt):
+		self.mygrid.Info()
 		
 	def OnDel(self,evt):
 		self.mygrid.Del()
